@@ -23,11 +23,17 @@ FROM node:22
 
 WORKDIR /app
 
-#Copy server files
+# Copy server files
 COPY --from=builder /app/server .
-# Copy built frontend assets from the builder stage
+
+# Copy built frontend assets (The compiled React code)
 COPY --from=builder /app/dist ./dist
+
+# CRITICAL FIX: Copy the manifest and icons from public to the final root
+COPY --from=builder /app/public/manifest.json ./dist/
+COPY --from=builder /app/public/icon.png ./dist/ 
 
 EXPOSE 3000
 
 CMD ["node", "server.js"]
+
