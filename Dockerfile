@@ -14,7 +14,7 @@ RUN npm install
 
 # Install dependencies and build the frontend
 WORKDIR /app
-RUN mkdir dist
+RUN mkdir -p dist
 RUN bash -c 'if [ -f package.json ]; then npm install && npm run build; fi'
 
 
@@ -26,13 +26,8 @@ WORKDIR /app
 # Copy server files
 COPY --from=builder /app/server .
 
-# Copy built frontend assets (The compiled React code)
+# Copy built frontend assets (includes JS, manifest.json, icons/)
 COPY --from=builder /app/dist ./dist
-
-# CRITICAL FIX: Copy the manifest and icons from public to the final root
-
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public/manifest.json ./dist/
 
 EXPOSE 3000
 

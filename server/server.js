@@ -21,8 +21,10 @@ const externalWsBaseUrl = 'wss://generativelanguage.googleapis.com';
 // Support either API key env-var variant
 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
-const staticPath = path.join(__dirname,'dist');
-const publicPath = path.join(__dirname,'public');
+
+// To these (pointing to the current directory)
+const staticPath = path.join(__dirname, 'dist');
+const publicPath = __dirname; // The service-worker and manifest are here in Stage 2
 
 
 if (!apiKey) {
@@ -195,6 +197,41 @@ if ('serviceWorker' in navigator) {
 </script>
 `;
 
+app.get('/websocket-interceptor.js', (req, res) => {
+   res.set('Content-Type', 'application/javascript');
+   return res.sendFile(path.join(publicPath, 'websocket-interceptor.js'));
+});
+
+
+app.get('/service-worker.js', (req, res) => {
+   return res.sendFile(path.join(publicPath, 'public', 'service-worker.js'));
+});
+
+//app.get('/manifest.json', (req, res) => {
+//   res.set('Content-Type', 'application/manifest+json');
+//   return res.sendFile(path.join(__dirname, 'dist', 'manifest.json'));
+//});
+
+app.get('/manifest.json', (req, res) => {
+    // Try to find it in the dist folder first
+    const manifestPath = path.join(__dirname, 'dist', 'manifest.json');
+    
+    if (fs.existsSync(manifestPath)) {
+        res.set('Content-Type', 'application/manifest+json');
+        return res.sendFile(manifestPath);
+    } else {
+        // Fallback to current directory if Docker moved it
+        const fallbackPath = path.join(__dirname, 'manifest.json');
+        res.set('Content-Type', 'application/manifest+json');
+        return res.sendFile(fallbackPath);
+    }
+});
+
+app.get('/favicon.ico', (req, res) => {
+    // Redirect to your known good icon URL
+    res.redirect('https://cdn-icons-png.flaticon.com/512/2503/2503508.png');
+});
+
 // Serve index.html or placeholder based on API key and file availability
 app.get('/', (req, res) => {
     const placeholderPath = path.join(publicPath, 'placeholder.html');
@@ -234,10 +271,6 @@ app.get('/', (req, res) => {
         }
         res.send(injectedHtml);
     });
-});
-
-app.get('/service-worker.js', (req, res) => {
-   return res.sendFile(path.join(publicPath, 'service-worker.js'));
 });
 
 app.use('/public', express.static(publicPath));
