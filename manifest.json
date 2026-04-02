@@ -1,4 +1,3 @@
-
 {
   "short_name": "CineCode",
   "name": "CineCode: Movie Barcode Visualizer",
@@ -6,11 +5,16 @@
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2503/2503508.png",
       "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2503/2503508.png",
+      "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "theme_color": "#09090b",
   "background_color": "#09090b"
