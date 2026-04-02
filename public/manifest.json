@@ -1,0 +1,38 @@
+{
+  "short_name": "CineCode",
+  "name": "CineCode: Movie Barcode Visualizer",
+  "description": "Visualize movie aesthetics through barcodes.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2503/2503508.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2503/2503508.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2503/2503508.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Movie Barcode View"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2503/2503508.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "label": "Movie Barcode View"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#09090b",
+  "background_color": "#09090b"
+}
+
