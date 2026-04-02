@@ -1,0 +1,7 @@
+{
+  "name": "Movie_Barcode: Movie Barcode & Rating Visualizer",
+  "description": "A modern web application to generate, visualize, and rate movie 'barcodes' (color palettes) inspired by the movie_barcode project. Explore cinematic aesthetics and track your ratings on any device.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
