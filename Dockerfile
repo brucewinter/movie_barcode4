@@ -30,8 +30,9 @@ COPY --from=builder /app/server .
 COPY --from=builder /app/dist ./dist
 
 # CRITICAL FIX: Copy the manifest and icons from public to the final root
+
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public/manifest.json ./dist/
-COPY --from=builder /app/public/icon.png ./dist/ 
 
 EXPOSE 3000
 
