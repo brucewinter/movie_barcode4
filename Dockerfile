@@ -26,8 +26,12 @@ WORKDIR /app
 # Copy server files
 COPY --from=builder /app/server .
 
-# Copy built frontend assets (includes JS, manifest.json, icons/)
+# Copy built frontend assets (includes JS, icons/)
 COPY --from=builder /app/dist ./dist
+
+# Explicitly overwrite dist/manifest.json with the committed root manifest.json
+# (the build step does not reliably regenerate this file)
+COPY --from=builder /app/manifest.json ./dist/manifest.json
 
 EXPOSE 3000
 
