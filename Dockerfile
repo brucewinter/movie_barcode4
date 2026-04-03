@@ -26,15 +26,15 @@ WORKDIR /app
 # Copy server files
 COPY --from=builder /app/server .
 
-# Copy built frontend assets (includes JS, icons/)
+# Copy built frontend assets
 COPY --from=builder /app/dist ./dist
 
 # Explicitly overwrite dist/manifest.json with the committed root manifest.json
 # (the build step does not reliably regenerate this file)
 COPY --from=builder /app/manifest.json ./dist/manifest.json
 
-# Explicitly copy icons from public/ (Vite build does not reliably include them)
-COPY --from=builder /app/public/icons ./dist/icons
+# Copy the full public/ directory so icons and other assets are always available
+COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 

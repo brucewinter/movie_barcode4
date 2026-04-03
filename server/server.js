@@ -282,6 +282,7 @@ app.get('/', (req, res) => {
     });
 });
 
+app.use('/icons', express.static(path.join(__dirname, 'public', 'icons')));
 app.use('/public', express.static(publicPath));
 app.use(express.static(staticPath));
 
