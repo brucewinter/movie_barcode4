@@ -225,7 +225,27 @@ app.get('/manifest.json', (req, res) => {
                 "src": "/icons/icon-512.png",
                 "type": "image/png",
                 "sizes": "512x512",
-                "purpose": "any maskable"
+                "purpose": "any"
+            },
+            {
+                "src": "/icons/icon-512.png",
+                "type": "image/png",
+                "sizes": "512x512",
+                "purpose": "maskable"
+            }
+        ],
+        "screenshots": [
+            {
+                "src": "/icons/icon-512.png",
+                "type": "image/png",
+                "sizes": "512x512",
+                "form_factor": "narrow"
+            },
+            {
+                "src": "/icons/icon-512.png",
+                "type": "image/png",
+                "sizes": "512x512",
+                "form_factor": "wide"
             }
         ],
         "start_url": "/",
