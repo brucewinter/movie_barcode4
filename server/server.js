@@ -159,6 +159,7 @@ app.use('/api-proxy', async (req, res, next) => {
             }
         });
 
+
     } catch (error) {
         console.error('Proxy error before request to target API:', error);
         if (!res.headersSent) {
@@ -207,24 +208,32 @@ app.get('/service-worker.js', (req, res) => {
    return res.sendFile(path.join(publicPath, 'public', 'service-worker.js'));
 });
 
-//app.get('/manifest.json', (req, res) => {
-//   res.set('Content-Type', 'application/manifest+json');
-//   return res.sendFile(path.join(__dirname, 'dist', 'manifest.json'));
-//});
-
 app.get('/manifest.json', (req, res) => {
-    // Try to find it in the dist folder first
-    const manifestPath = path.join(__dirname, 'dist', 'manifest.json');
-    
-    if (fs.existsSync(manifestPath)) {
-        res.set('Content-Type', 'application/manifest+json');
-        return res.sendFile(manifestPath);
-    } else {
-        // Fallback to current directory if Docker moved it
-        const fallbackPath = path.join(__dirname, 'manifest.json');
-        res.set('Content-Type', 'application/manifest+json');
-        return res.sendFile(fallbackPath);
-    }
+    res.set('Content-Type', 'application/manifest+json');
+    res.json({
+        "short_name": "CineCode",
+        "name": "CineCode: Movie Barcode Visualizer",
+        "description": "Visualize movie aesthetics through barcodes.",
+        "icons": [
+            {
+                "src": "/icons/icon-192.png",
+                "type": "image/png",
+                "sizes": "192x192",
+                "purpose": "any"
+            },
+            {
+                "src": "/icons/icon-512.png",
+                "type": "image/png",
+                "sizes": "512x512",
+                "purpose": "any maskable"
+            }
+        ],
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "theme_color": "#09090b",
+        "background_color": "#09090b"
+    });
 });
 
 app.get('/favicon.ico', (req, res) => {
