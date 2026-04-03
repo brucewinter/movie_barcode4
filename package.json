@@ -9,7 +9,10 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "5.4.11"
+    "vite": "5.4.21"
+  },
+  "overrides": {
+    "serialize-javascript": "7.0.5"
   },
   "dependencies": {
     "@google/genai": "1.48.0",
