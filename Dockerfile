@@ -33,6 +33,9 @@ COPY --from=builder /app/dist ./dist
 # (the build step does not reliably regenerate this file)
 COPY --from=builder /app/manifest.json ./dist/manifest.json
 
+# Explicitly copy icons from public/ (Vite build does not reliably include them)
+COPY --from=builder /app/public/icons ./dist/icons
+
 EXPOSE 3000
 
 CMD ["node", "server.js"]
