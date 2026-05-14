@@ -1,11 +1,11 @@
 
 import { Movie } from "../types";
 
-const BASE_URL = 'https://api.themoviedb.org/3';
+const BASE_URL = '/tmdb-proxy';
 
-export const validateTmdbKey = async (key: string): Promise<boolean> => {
+export const validateTmdbKey = async (_key: string): Promise<boolean> => {
   try {
-    const res = await fetch(`${BASE_URL}/authentication/token/new?api_key=${key}`);
+    const res = await fetch(`${BASE_URL}/authentication/token/new`);
     const data = await res.json();
     return data.success === true;
   } catch {
@@ -13,21 +13,21 @@ export const validateTmdbKey = async (key: string): Promise<boolean> => {
   }
 };
 
-export const searchTmdb = async (query: string, key: string, year?: string): Promise<any> => {
-  let url = `${BASE_URL}/search/movie?api_key=${key}&query=${encodeURIComponent(query)}&include_adult=false`;
+export const searchTmdb = async (query: string, _key: string, year?: string): Promise<any> => {
+  let url = `${BASE_URL}/search/movie?query=${encodeURIComponent(query)}&include_adult=false`;
   if (year) {
     url += `&year=${year}`;
   }
-  
+
   const res = await fetch(url);
   const data = await res.json();
-  
+
   // Return top result
   return data.results?.[0] || null;
 };
 
-export const getTmdbDetails = async (id: number, key: string): Promise<Partial<Movie>> => {
-  const res = await fetch(`${BASE_URL}/movie/${id}?api_key=${key}&append_to_response=external_ids,credits,release_dates`);
+export const getTmdbDetails = async (id: number, _key: string): Promise<Partial<Movie>> => {
+  const res = await fetch(`${BASE_URL}/movie/${id}?append_to_response=external_ids,credits,release_dates`);
   const data = await res.json();
 
   const director = data.credits?.crew?.find((c: any) => c.job === 'Director')?.name || 'Unknown';

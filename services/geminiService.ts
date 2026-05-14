@@ -2,11 +2,34 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResponse, Movie } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const proxyBase = typeof window !== 'undefined'
+  ? `${window.location.origin}/api-proxy`
+  : 'http://localhost:3000/api-proxy';
+
+const ai = new GoogleGenAI({
+  apiKey: 'proxy',
+  httpOptions: { baseUrl: proxyBase },
+});
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 2000): Promise<T> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const is429 = err?.status === 429 || err?.message?.includes('429') || err?.message?.includes('quota') || err?.message?.includes('Resource has been exhausted');
+      if (is429 && attempt < retries - 1) {
+        await new Promise(r => setTimeout(r, delayMs * Math.pow(2, attempt)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
 
 // Existing "Full Search" for users without TMDb Key
 export const analyzeMovie = async (query: string): Promise<AnalysisResponse> => {
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [{
@@ -60,7 +83,7 @@ export const analyzeMovie = async (query: string): Promise<AnalysisResponse> => 
         required: ["title", "year", "barcodePalette"]
       }
     }
-  });
+  }));
 
   const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
     title: chunk.web?.title || "Reference",
@@ -100,7 +123,7 @@ export const enrichMovieData = async (movie: Partial<Movie>): Promise<{
   rtRating: string,
   wikipediaUrl: string
 }> => {
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [{
@@ -136,7 +159,7 @@ export const enrichMovieData = async (movie: Partial<Movie>): Promise<{
         required: ["barcodePalette"]
       }
     }
-  });
+  }));
 
   try {
     const data = JSON.parse(response.text || "{}");
@@ -159,7 +182,7 @@ export const enrichMovieData = async (movie: Partial<Movie>): Promise<{
 };
 
 export const identifyMovieFromImage = async (base64Image: string): Promise<string> => {
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [
@@ -177,12 +200,12 @@ export const identifyMovieFromImage = async (base64Image: string): Promise<strin
     config: {
       thinkingConfig: { thinkingBudget: 0 }
     }
-  });
+  }));
   return response.text?.trim() || "Unknown";
 };
 
 export const getMovieRecommendation = async (favoritePalettes: string[][]): Promise<string> => {
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [{
@@ -192,6 +215,6 @@ export const getMovieRecommendation = async (favoritePalettes: string[][]): Prom
     config: {
       thinkingConfig: { thinkingBudget: 0 }
     }
-  });
+  }));
   return response.text || "No recommendations found.";
 };

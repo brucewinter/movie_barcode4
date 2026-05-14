@@ -20,11 +20,22 @@ import {
   Clock
 } from 'lucide-react';
 import { Movie } from './types';
-import { analyzeMovie, enrichMovieData, identifyMovieFromImage, getMovieRecommendation } from './services/geminiService';
+import * as GeminiService from './services/geminiService';
+import * as ClaudeService from './services/claudeService';
 import { searchTmdb, getTmdbDetails } from './services/tmdbService';
 import { Barcode } from './components/Barcode';
 
 const APP_VERSION = "1.5.0";
+
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return generateId();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+};
 
 type SortMode = 'added' | 'rating' | 'year' | 'title';
 
@@ -42,6 +53,10 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [tmdbKey, setTmdbKey] = useState('');
   const [tempKey, setTempKey] = useState('');
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'claude'>('gemini');
+  const claudeAvailable = !!(window as any).__CLAUDE_AVAILABLE__;
+
+  const ai = aiProvider === 'claude' ? ClaudeService : GeminiService;
 
   // Recommendations
   const [showRecs, setShowRecs] = useState(false);
@@ -60,10 +75,15 @@ const App: React.FC = () => {
       if (savedMovies) setMovies(JSON.parse(savedMovies));
 
       const savedKey = localStorage.getItem('cinecode_tmdb_key');
-      if (savedKey) {
-        setTmdbKey(savedKey);
-        setTempKey(savedKey);
+      const serverKey = (window as any).__TMDB_API_KEY__;
+      const resolvedKey = savedKey || serverKey || '';
+      if (resolvedKey) {
+        setTmdbKey(resolvedKey);
+        setTempKey(resolvedKey);
       }
+      const savedProvider = localStorage.getItem('cinecode_ai_provider') as 'gemini' | 'claude' | null;
+      if (savedProvider === 'claude' && (window as any).__CLAUDE_AVAILABLE__) setAiProvider('claude');
+      else if (savedProvider === 'gemini') setAiProvider('gemini');
     } catch (e) {
       console.error("Storage load error", e);
     } finally {
@@ -95,6 +115,7 @@ const App: React.FC = () => {
 
   const saveTmdbKey = () => {
     localStorage.setItem('cinecode_tmdb_key', tempKey);
+    localStorage.setItem('cinecode_ai_provider', aiProvider);
     setTmdbKey(tempKey);
     setShowSettings(false);
   };
@@ -110,7 +131,7 @@ const App: React.FC = () => {
     setRecLoading(true);
     try {
       const palettes = favorites.map(m => m.barcodePalette);
-      const recs = await getMovieRecommendation(palettes);
+      const recs = await ai.getMovieRecommendation(palettes);
       setRecommendations(recs);
     } catch (e) {
       setRecommendations("Could not generate recommendations at this time.");
@@ -194,7 +215,7 @@ const App: React.FC = () => {
       if (existingIds.has(imdbId)) continue;
 
       newMovies.push({
-        id: crypto.randomUUID(),
+        id: generateId(),
         title: cols[idx.title],
         year: cols[idx.year] || 'N/A',
         director: cols[idx.directors] || 'Unknown',
@@ -244,12 +265,11 @@ const App: React.FC = () => {
           setLoadingStep('Fetching official metadata...');
           const details = await getTmdbDetails(searchResult.id, tmdbKey);
           
-          setLoadingStep('Fetching live ratings & palette (Gemini)...');
-          // Enriched step: Use Gemini to find RT/IMDb scores even if using TMDb key
-          const enriched = await enrichMovieData(details);
+          setLoadingStep(`Fetching live ratings & palette (${aiProvider === 'claude' ? 'Claude' : 'Gemini'})...`);
+          const enriched = await ai.enrichMovieData(details);
           
           newMovie = {
-            id: crypto.randomUUID(),
+            id: generateId(),
             title: details.title || title,
             year: details.year || "N/A",
             director: details.director || "Unknown",
@@ -269,17 +289,17 @@ const App: React.FC = () => {
             wikipediaUrl: enriched.wikipediaUrl // From Gemini Search
           };
         } else {
-          setLoadingStep('TMDb search empty. Falling back to AI Search...');
-          const result = await analyzeMovie(rawQuery);
+          setLoadingStep(`TMDb search empty. Falling back to ${aiProvider === 'claude' ? 'Claude' : 'Gemini'}...`);
+          const result = await ai.analyzeMovie(rawQuery);
           if (!result.movie.title) throw new Error("AI Analysis Failed");
-          newMovie = { ...result.movie, id: crypto.randomUUID(), rating: 0 } as Movie;
+          newMovie = { ...result.movie, id: generateId(), rating: 0 } as Movie;
         }
 
       } else {
-        setLoadingStep('Analyzing via Google Search...');
-        const result = await analyzeMovie(rawQuery);
+        setLoadingStep(`Analyzing via ${aiProvider === 'claude' ? 'Claude' : 'Google Search'}...`);
+        const result = await ai.analyzeMovie(rawQuery);
         if (!result.movie.title) throw new Error("Analysis Failed");
-        newMovie = { ...result.movie, id: crypto.randomUUID(), rating: 0 } as Movie;
+        newMovie = { ...result.movie, id: generateId(), rating: 0 } as Movie;
       }
 
       const existingMatch = movies.find(m => 
@@ -353,7 +373,7 @@ const App: React.FC = () => {
     setLoadingStep('Analyzing film artwork...');
     
     try {
-      const title = await identifyMovieFromImage(base64);
+      const title = await ai.identifyMovieFromImage(base64);
       if (title && title !== "Unknown") {
         startAnalysis(title, true);
       } else {
@@ -447,6 +467,27 @@ const App: React.FC = () => {
                   Use a <a href="https://www.themoviedb.org/documentation/api" target="_blank" className="text-indigo-400 hover:underline">TMDb API Key</a> to guarantee correct links, metadata, and <strong>POSTERS</strong>.
                 </p>
               </div>
+
+              {claudeAvailable && (
+                <div>
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">AI Provider</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setAiProvider('gemini')}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors border ${aiProvider === 'gemini' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'}`}
+                    >
+                      Gemini
+                    </button>
+                    <button
+                      onClick={() => setAiProvider('claude')}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors border ${aiProvider === 'claude' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'}`}
+                    >
+                      Claude
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-2">Claude uses Anthropic's API. Gemini uses Google's API.</p>
+                </div>
+              )}
 
               <div className="pt-2">
                 <button onClick={saveTmdbKey} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-indigo-500/20">

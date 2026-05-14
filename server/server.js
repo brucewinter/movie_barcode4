@@ -20,6 +20,19 @@ const externalApiBaseUrl = 'https://generativelanguage.googleapis.com';
 const externalWsBaseUrl = 'wss://generativelanguage.googleapis.com';
 // Support either API key env-var variant
 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const tmdbApiKey = process.env.TMDB_API_KEY || '';
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
+
+let anthropicClient = null;
+if (anthropicApiKey) {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    anthropicClient = new Anthropic({ apiKey: anthropicApiKey });
+    console.log('Claude API client initialized');
+  } catch (e) {
+    console.error('Failed to initialize Anthropic SDK:', e.message);
+  }
+}
 
 
 // To these (pointing to the current directory)
@@ -177,7 +190,141 @@ app.use('/api-proxy', async (req, res, next) => {
     }
 });
 
+// Proxy route for TMDB API calls
+app.use('/tmdb-proxy', async (req, res) => {
+    try {
+        const targetPath = req.url.startsWith('/') ? req.url.substring(1) : req.url;
+        const separator = targetPath.includes('?') ? '&' : '?';
+        const apiUrl = `https://api.themoviedb.org/3/${targetPath}${separator}api_key=${tmdbApiKey}`;
+        console.log(`TMDB Proxy: Forwarding request to ${apiUrl.replace(tmdbApiKey, '[REDACTED]')}`);
+
+        const apiResponse = await axios({ method: req.method, url: apiUrl, responseType: 'stream', validateStatus: () => true });
+        for (const header in apiResponse.headers) res.setHeader(header, apiResponse.headers[header]);
+        res.status(apiResponse.status);
+        apiResponse.data.pipe(res);
+    } catch (error) {
+        console.error('TMDB proxy error:', error.message);
+        if (!res.headersSent) res.status(500).json({ error: 'TMDB proxy error', message: error.message });
+    }
+});
+
+// Claude API endpoints
+function extractClaudeText(response) {
+  return response.content.filter(b => b.type === 'text').map(b => b.text).join('');
+}
+
+function parseClaudeJson(text) {
+  try {
+    return JSON.parse(text.replace(/```json\n?|\n?```/g, '').trim());
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) try { return JSON.parse(match[0]); } catch {}
+    return {};
+  }
+}
+
+app.post('/claude-api/analyze', async (req, res) => {
+  if (!anthropicClient) return res.status(503).json({ error: 'Claude not configured' });
+  try {
+    const { query } = req.body;
+    const response = await anthropicClient.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: `Identify the movie: "${query}"
+
+Return ONLY a JSON object with these fields:
+{
+  "title": "exact movie title",
+  "year": "release year",
+  "director": "director name",
+  "genre": ["genre1", "genre2"],
+  "description": "2-3 sentence plot summary",
+  "barcodePalette": ["#hex1","#hex2",...20 hex colors evoking the film's cinematography and color grading],
+  "imdbId": "ttXXXXXXX or empty string",
+  "imdbRating": "e.g. 7.4 or empty string",
+  "tmdbId": "number as string or empty string",
+  "rottenTomatoesUrl": "full URL or empty string",
+  "rtRating": "e.g. 92% or empty string",
+  "wikipediaUrl": "full English Wikipedia URL or empty string"
+}` }]
+    });
+    const movie = parseClaudeJson(extractClaudeText(response));
+    res.json({ movie, groundingSources: [] });
+  } catch (e) {
+    console.error('Claude analyze error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/claude-api/enrich', async (req, res) => {
+  if (!anthropicClient) return res.status(503).json({ error: 'Claude not configured' });
+  try {
+    const { movie } = req.body;
+    const response = await anthropicClient.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: `For the movie "${movie.title}" (${movie.year}) directed by ${movie.director}, return ONLY a JSON object:
+{
+  "barcodePalette": ["#hex1",...20 hex colors evoking the film's visual identity],
+  "imdbRating": "e.g. 7.4 or empty string",
+  "rottenTomatoesUrl": "full RT URL or empty string",
+  "rtRating": "e.g. 92% or empty string",
+  "wikipediaUrl": "full English Wikipedia URL or empty string"
+}` }]
+    });
+    const data = parseClaudeJson(extractClaudeText(response));
+    res.json({
+      barcodePalette: data.barcodePalette || Array(20).fill('#333333'),
+      imdbRating: data.imdbRating || '',
+      rottenTomatoesUrl: data.rottenTomatoesUrl || '',
+      rtRating: data.rtRating || '',
+      wikipediaUrl: data.wikipediaUrl || ''
+    });
+  } catch (e) {
+    console.error('Claude enrich error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/claude-api/identify-image', async (req, res) => {
+  if (!anthropicClient) return res.status(503).json({ error: 'Claude not configured' });
+  try {
+    const { base64Image } = req.body;
+    const response = await anthropicClient.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Image } },
+        { type: 'text', text: "Identify this movie cover. Return ONLY 'Title (Year)'. Be very specific." }
+      ]}]
+    });
+    res.json({ title: extractClaudeText(response).trim() });
+  } catch (e) {
+    console.error('Claude identify error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/claude-api/recommend', async (req, res) => {
+  if (!anthropicClient) return res.status(503).json({ error: 'Claude not configured' });
+  try {
+    const { palettes } = req.body;
+    const response = await anthropicClient.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: `Analyze these color palettes: ${JSON.stringify(palettes)}. Recommend 3 visually similar movies. Titles and short reasons only.` }]
+    });
+    res.json({ text: extractClaudeText(response) });
+  } catch (e) {
+    console.error('Claude recommend error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const webSocketInterceptorScriptTag = `<script src="/public/websocket-interceptor.js" defer></script>`;
+const tmdbKeyScriptTag = tmdbApiKey
+  ? `<script>window.__TMDB_API_KEY__=${JSON.stringify(tmdbApiKey)};window.__CLAUDE_AVAILABLE__=${JSON.stringify(!!anthropicApiKey)};</script>`
+  : `<script>window.__CLAUDE_AVAILABLE__=${JSON.stringify(!!anthropicApiKey)};</script>`;
 
 // Prepare service worker registration script content
 const serviceWorkerRegistrationScript = `
@@ -291,7 +438,7 @@ app.get('/', (req, res) => {
             // Inject WebSocket interceptor first, then service worker script
             injectedHtml = injectedHtml.replace(
                 '<head>',
-                `<head>${webSocketInterceptorScriptTag}${serviceWorkerRegistrationScript}`
+                `<head>${tmdbKeyScriptTag}${webSocketInterceptorScriptTag}${serviceWorkerRegistrationScript}`
             );
             console.log("LOG: Scripts injected into <head>.");
         } else {
@@ -303,7 +450,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/icons', express.static(path.join(__dirname, 'public', 'icons')));
-app.use('/public', express.static(publicPath));
+app.use('/public', express.static(path.join(publicPath, 'public')));
 app.use(express.static(staticPath));
 
 // Start the HTTP server
