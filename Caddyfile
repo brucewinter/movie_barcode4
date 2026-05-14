@@ -1,3 +1,0 @@
-brucewinter.net {
-    reverse_proxy movie-barcode:3000
-}
