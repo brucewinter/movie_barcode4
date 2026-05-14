@@ -1,0 +1,10 @@
+services:
+  movie-barcode:
+    build: .
+    container_name: movie-barcode
+    ports:
+      - "3000:3000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PORT=3000
+    restart: unless-stopped
