@@ -25,11 +25,11 @@ import * as ClaudeService from './services/claudeService';
 import { searchTmdb, getTmdbDetails } from './services/tmdbService';
 import { Barcode } from './components/Barcode';
 
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.5.2";
 
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return generateId();
+    return crypto.randomUUID();
   }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
@@ -341,14 +341,27 @@ const App: React.FC = () => {
   const openCamera = async () => {
     setIsCameraOpen(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
+      if (!window.isSecureContext) {
+        throw new Error(
+          `Camera requires a secure context (HTTPS or localhost). This page is loaded over ${window.location.protocol}//${window.location.host} — browsers block camera access on plain HTTP from non-localhost origins.`
+        );
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This browser does not expose navigator.mediaDevices.getUserMedia.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      alert("Camera access denied.");
+      const e = err as DOMException & { message?: string };
+      console.error('openCamera failed:', e);
+      let msg = `Camera error: ${e.name || 'Error'} — ${e.message || 'unknown'}`;
+      if (e.name === 'NotAllowedError') msg += '\n\nThe browser blocked camera access. Check the site permissions in your browser address bar.';
+      else if (e.name === 'NotFoundError') msg += '\n\nNo camera device was found on this machine.';
+      alert(msg);
       setIsCameraOpen(false);
     }
   };
@@ -488,6 +501,18 @@ const App: React.FC = () => {
                   <p className="text-[10px] text-zinc-500 mt-2">Claude uses Anthropic's API. Gemini uses Google's API.</p>
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Import</label>
+                <button
+                  onClick={() => { setShowSettings(false); fileInputRef.current?.click(); }}
+                  className="w-full py-2.5 bg-zinc-950 border border-zinc-800 hover:border-indigo-500/50 hover:text-white text-zinc-400 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import IMDb Ratings CSV
+                </button>
+                <p className="text-[10px] text-zinc-500 mt-2">Merges with your existing collection — duplicates are skipped.</p>
+              </div>
 
               <div className="pt-2">
                 <button onClick={saveTmdbKey} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-indigo-500/20">
